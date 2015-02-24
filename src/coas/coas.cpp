@@ -20,11 +20,11 @@
 #include <semaphore.h>
 
 #include "../md5/md5.h"
-#include "../RadiusClient/Radius.h"
-#include "../../../utils/log/Log.h"
-#include "../../../utils/CoACommon.h"
-#include "../../../utils/pspacket/PSPacket.h"
-#include "../../../utils/config/Config.h"
+#include "../radiusclient/radius.h"
+#include "../../../utils/log/log.h"
+#include "../../../utils/coacommon.h"
+#include "../../../utils/pspacket/pspacket.h"
+#include "../../../utils/config/config.h"
 #define OTL_ORA10G
 #include "../../../utils/otlv4.h"
 #include "coas.h"

@@ -29,9 +29,9 @@
 #include <vector>
 #include <string>
 
-#include "../../../utils/CoACommon.h"
-#include "../../../utils/config/Config.h"
-#include "../../../utils/log/Log.h"
+#include "../../../utils/coacommon.h"
+#include "../../../utils/config/config.h"
+#include "../../../utils/log/log.h"
 #include "../coas/coas.h"
 #include "main.h"
 

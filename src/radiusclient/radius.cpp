@@ -17,9 +17,9 @@
 #include <map>
 
 #include "../md5/md5.h"
-#include "../../../utils/log/Log.h"
+#include "../../../utils/log/log.h"
 #include "../coas/coas.h"
-#include "Radius.h"
+#include "radius.h"
 
 extern CLog g_coLog;
 extern unsigned int g_uiDebug;
@@ -148,7 +148,7 @@ int CRadiusClient::AddAttr(
 		char mcRem[128];
 		int iRemLen;
 
-		g_coLog.WriteLog ("RadiusClient: AddAttr: packet id '%d' is not used", p_uiReqId);
+		g_coLog.WriteLog ("radiusclient: AddAttr: packet id '%d' is not used", p_uiReqId);
 		return -1;
 	}
 
@@ -186,7 +186,7 @@ int CRadiusClient::SendPack(
 		/*  Если дана команда на прекращение работы
 		 */
 		if (! m_vbContSend) {
-			g_coLog.WriteLog ("RadiusClient: SendPack: received shutdown command");
+			g_coLog.WriteLog ("radiusclient: SendPack: received shutdown command");
 			iRetVal -1;
 			break;
 		}
@@ -208,7 +208,7 @@ int CRadiusClient::SendPack(
 		/*	Проверка значения id пакета RADIUS
 		 */
 		if (0x100 <= p_uiReqId) {
-			g_coLog.WriteLog ("RadiusClient: SendPack: invalid packet id: '%d'", p_uiReqId);
+			g_coLog.WriteLog ("radiusclient: SendPack: invalid packet id: '%d'", p_uiReqId);
 			iRetVal -1;
 			break;
 		}
@@ -216,7 +216,7 @@ int CRadiusClient::SendPack(
 		/*	Проверка используемости пакета
 		 */
 		if (! m_msoPackQueue[p_uiReqId].m_vbIsUsed) {
-			g_coLog.WriteLog ("RadiusClient: SendPack: packet id '%d' is not used", p_uiReqId);
+			g_coLog.WriteLog ("radiusclient: SendPack: packet id '%d' is not used", p_uiReqId);
 			iRetVal -1;
 			break;
 		}
@@ -231,7 +231,7 @@ int CRadiusClient::SendPack(
 		 */
 		if (uiPackLen < 20
 			&& uiPackLen > 4096) {
-				g_coLog.WriteLog ("RadiusClient: SendPack: packet id: '%u'; invalid size: '%u'", p_uiReqId, uiPackLen);
+				g_coLog.WriteLog ("radiusclient: SendPack: packet id: '%u'; invalid size: '%u'", p_uiReqId, uiPackLen);
 				break;
 		}
 
@@ -259,7 +259,7 @@ int CRadiusClient::SendPack(
 		iParsPackLen = snprintf(
 			pszParsedPack,
 			iBufSize - 1,
-			"RadiusClient: SendPack: Send packet to '%s:%u':\n",
+			"radiusclient: SendPack: Send packet to '%s:%u':\n",
 			p_pszCoAServerIp,
 			p_usCoAServerPort);
 		if (0 < iParsPackLen) {
@@ -283,7 +283,7 @@ int CRadiusClient::SendPack(
 			if (strerror_r (iErrCode, mcErr, sizeof(mcErr) - 1)) {
 				*mcErr = 0;
 			}
-			iRemLen = sprintf (p_pmcRem, "RadiusClient: SendPack: sendto packet id '%u' error: '%d': '%s'", p_uiReqId, iErrCode, mcErr);
+			iRemLen = sprintf (p_pmcRem, "radiusclient: SendPack: sendto packet id '%u' error: '%d': '%s'", p_uiReqId, iErrCode, mcErr);
 			g_coLog.Dump (p_pmcRem);
 			break;
 		}
@@ -297,7 +297,7 @@ int CRadiusClient::SendPack(
 		}
 
 		if (*p_puiBufSize < m_msoPackQueue[p_uiReqId].m_usRecvDataLen) {
-			g_coLog.WriteLog ("RadiusClient: SendPack: buffer size '%u' not enough for packet: id: '%u'; size: '%u'", *p_puiBufSize, p_uiReqId, uiPackLen);
+			g_coLog.WriteLog ("radiusclient: SendPack: buffer size '%u' not enough for packet: id: '%u'; size: '%u'", *p_puiBufSize, p_uiReqId, uiPackLen);
 			iRetVal = -1;
 			break;
 		}
