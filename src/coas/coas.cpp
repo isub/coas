@@ -1699,7 +1699,7 @@ int RequestOperateCommandReq (std::multimap<unsigned short,SPSReqAttr*> &p_mmapA
 		CPSPacket coPSPack;
 		bool bDescrIsCrtd = false;
 		__uint16_t ui16AttrLen;
-		char mcRem[0x1000];
+		char mcRem[0x1000] = { '\0' };
 
 		/* задаем тип запроса */
 		coPSPack.SetReqType (p_psoResp, p_stBufSize, COMMAND_RSP, 0);
