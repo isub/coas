@@ -71,7 +71,7 @@ public:
 	void ReleaseId (unsigned char p_ucPackId);
 
 private:
-	volatile long m_vlLastPackId;
+	volatile unsigned int m_uiLastPackId;
 	SPackQueueElem m_msoPackQueue[0x100];
 	volatile bool m_vbContSend;
 	volatile bool m_vbContRecv;

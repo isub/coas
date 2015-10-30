@@ -774,8 +774,7 @@ int SendRequest (std::multimap<unsigned short,SPSReqAttr*> &p_mmapPSAttrList, SC
 
 		soCmdParam.m_uiRequestId = soCmdParam.m_psoCoASrvrParam->m_pcoRadiusClient->GetNewId (43);
 		if (0x100 <= soCmdParam.m_uiRequestId) {
-			/*	Неверный идентификатор пакета
-			 */
+			/*	Неверный идентификатор пакета */
 			strcpy (p_pmcRem, "Can not get new packet id");
 			g_coLog.WriteLog ("coas: SendRequest: Error: Can not get new packet id");
 			iRetVal = -256;

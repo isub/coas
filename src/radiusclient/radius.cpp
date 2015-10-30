@@ -26,7 +26,7 @@ extern unsigned int g_uiDebug;
 
 CRadiusClient::CRadiusClient (SSrvParam *p_psoCoASrvr, int p_iReqTimeout)
 {
-	m_vlLastPackId = -1;
+	m_uiLastPackId = (unsigned int) -1;
 	m_vbContSend = true;
 	m_vbContRecv = true;
 	m_psoCoASrvr = p_psoCoASrvr;
@@ -103,20 +103,26 @@ unsigned int CRadiusClient::GetNewId (unsigned char p_ucCode)
 	SRadiusHeader *psoTmpPtr;
 
 	/* блокируем доступ к участку кода */
-	pthread_mutex_lock (&m_mMutexGetId);
-
-	/*	Назначение нового идентификатора
-	 */
-	uiPackId = ++m_vlLastPackId;
-	uiPackId %= 0x100;
-
-	/*	Если идентификатор занят
-	 *	возвращаем ошибку
-	 */
-	if (m_msoPackQueue[uiPackId].m_vbIsUsed) {
-		return (unsigned int)-1;
+	if (pthread_mutex_lock (&m_mMutexGetId)) {
+		return (unsigned int) 0x100;
 	}
 
+	/*	Назначение нового идентификатора */
+	for (int i = 0; i < 0x100; ++i) {
+		/* увеличиваем счетчик */
+		m_uiLastPackId++;
+		/* нормализуем значение */
+		m_uiLastPackId %= 0x100;
+		uiPackId = m_uiLastPackId;
+		/*	Если идентификатор свободен продолжаем выполнение процедуры */
+		if (! m_msoPackQueue[uiPackId].m_vbIsUsed) {
+			goto success;
+		}
+	}
+	/* если мы дошли до этой точки, значит свободного идентификатора мы не нашли */
+	uiPackId = 0x101;
+	goto exit_and_unlock;
+success:
 	m_msoPackQueue[uiPackId].m_vbIsUsed = true;
 	m_msoPackQueue[uiPackId].m_usRecvDataLen = 0;
 
@@ -126,12 +132,12 @@ unsigned int CRadiusClient::GetNewId (unsigned char p_ucCode)
 	psoTmpPtr->m_ucIdentifier = (unsigned char)uiPackId;
 	psoTmpPtr->m_usLength = sizeof(*psoTmpPtr) - sizeof(psoTmpPtr->m_msoAttributes);
 
+exit_and_unlock:
 	pthread_mutex_unlock (&m_mMutexGetId);
 	/* участок кода освобожден */
 
 	return uiPackId;
 }
-
 
 int CRadiusClient::AddAttr(
 	unsigned int p_uiReqId,
@@ -816,7 +822,7 @@ int CRadiusClient::RecvCoASrvrResp (int p_iReqId)
 		my_inet_ntoa_r (m_soFrom.sin_addr, mcIpAddr, sizeof (mcIpAddr));
 		iParsPackLen += sprintf(
 			&(mcParsedPack[iParsPackLen]),
-			"packed received from '%s:%u':\n",
+			"packet received from '%s:%u':\n",
 			mcIpAddr,
 			ntohs (m_soFrom.sin_port));
 		ParsePacket(
