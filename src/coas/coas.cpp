@@ -111,9 +111,8 @@ int InitCoASensor () {
 	return iRetVal;
 }
 
-void DeInitCoASensor () {
-	int iFnRes;
-
+void DeInitCoASensor ()
+{
 	/* прекращаем чтение сокета */
 	if (-1 != g_iListenerSock) {
 		shutdown (
@@ -128,8 +127,7 @@ void DeInitCoASensor () {
 	if (-1 != g_iListenerSock) {
 		shutdown (g_iListenerSock, SHUT_RDWR);
 		if (0 != close (g_iListenerSock)) {
-			iFnRes = errno;
-			g_coLog.WriteLog ("Can not close socket. Error: '%d'", iFnRes);
+			g_coLog.WriteLog ("Can not close socket. Error: '%d'", errno);
 		}
 	}
 }
@@ -241,12 +239,11 @@ int InitSocket (
 	return iRetVal;
 }
 
-int InitThreadPool (SConnectInfo **p_ppmsoConnInf, int p_iConnCnt)
+int InitThreadPool (SConnectInfo *p_ppmsoConnInf[], int p_iConnCnt)
 {
 	int iRetVal = 0;
-	SConnectInfo *psoConnInfo;
 
-	*p_ppmsoConnInf = (SConnectInfo*) malloc (sizeof(SConnectInfo) * p_iConnCnt);
+	*p_ppmsoConnInf = reinterpret_cast<SConnectInfo*> (malloc (sizeof(SConnectInfo) * p_iConnCnt));
 
 	if (0 == (*p_ppmsoConnInf)) {
 		iRetVal = errno;
@@ -260,20 +257,22 @@ int InitThreadPool (SConnectInfo **p_ppmsoConnInf, int p_iConnCnt)
 	}
 
 	for (int i=0; i < p_iConnCnt; ++i) {
-		psoConnInfo = &((*p_ppmsoConnInf)[i]);
-		psoConnInfo->m_bIsFree = true;
-		psoConnInfo->m_uiThrdNum = i;
-		psoConnInfo->m_iSock = -1;
-		psoConnInfo->m_hThrdId = (unsigned int)-1;
-		psoConnInfo->m_bCont = true;
-		iRetVal = pthread_mutex_init (&(psoConnInfo->m_mMutex), NULL);
+		(*p_ppmsoConnInf)[i].m_bIsFree = true;
+		(*p_ppmsoConnInf)[i].m_uiThrdNum = i;
+		(*p_ppmsoConnInf)[i].m_iSock = -1;
+		(*p_ppmsoConnInf)[i].m_hThrdId = (unsigned int)-1;
+		(*p_ppmsoConnInf)[i].m_bCont = true;
+		iRetVal = pthread_mutex_init (&((*p_ppmsoConnInf)[i].m_mMutex), NULL);
 		if (iRetVal) {
 			break;
 		}
-		/* пробуем заблокировать мьютекс, если он не заблокирован */
-		iRetVal = pthread_mutex_trylock (&(psoConnInfo->m_mMutex));
+		/* блокируем мьютекс */
+		iRetVal = pthread_mutex_lock (&((*p_ppmsoConnInf)[i].m_mMutex));
+    if (iRetVal) {
+      break;
+    }
 		/* создаем поток */
-		iRetVal = pthread_create (&(psoConnInfo->m_hThrdId), NULL, RequestOperate, psoConnInfo);
+		iRetVal = pthread_create (&((*p_ppmsoConnInf)[i].m_hThrdId), NULL, RequestOperate, &((*p_ppmsoConnInf)[i]));
 		if (iRetVal) {
 			break;
 		}
@@ -454,7 +453,7 @@ int RequestManager ()
 void* RequestOperate (void* p_pvParam)
 {
 	int iFnRes;
-	SConnectInfo *psoConnInfo = (SConnectInfo*)p_pvParam;
+	SConnectInfo *psoConnInfo = reinterpret_cast<SConnectInfo*> (p_pvParam);
 	pollfd soPollFD;
 	char mcRem[0x2000];
 	int iRemLen;
@@ -593,7 +592,7 @@ void* RequestOperate (void* p_pvParam)
 			iRemLen = snprintf (
 				mcRem,
 				sizeof (mcRem) - 1,
-				"Conn/Req: '%08u/%u'; Thrd: '%04u'; coas: RequestOperate: Connection to '%s:%u': Received '%u' bytes:\n\t",
+				"Conn/Req: '%08u/%u'; Thrd: '%04u'; coas: RequestOperate: Connection to '%s:%u': Received '%d' bytes:\n\t",
 				psoConnInfo->m_uiConnNum,
 				uiReqNum,
 				psoConnInfo->m_uiThrdNum,
@@ -677,7 +676,7 @@ void* RequestOperate (void* p_pvParam)
 			iRemLen = snprintf(
 				mcRem,
 				sizeof(mcRem) - 1,
-				"Conn/Req: '%08u/%u'; Thrd: '%04u'; coas: RequestOperate: response sent to '%s:%u' %u bytes:\n\t",
+				"Conn/Req: '%08u/%u'; Thrd: '%04u'; coas: RequestOperate: response sent to '%s:%u' %d bytes:\n\t",
 				psoConnInfo->m_uiConnNum,
 				uiReqNum,
 				psoConnInfo->m_uiThrdNum,
@@ -827,11 +826,11 @@ int SendRequest (std::multimap<unsigned short,SPSReqAttr*> &p_mmapPSAttrList, SC
 
 SSrvParam * GetCoASrvrInfo (std::multimap<unsigned short,SPSReqAttr*> &p_ummapPSAttr)
 {
-	std::multimap<unsigned short,SPSReqAttr*>::iterator iterPSAttrList = p_ummapPSAttr.end ();
+	std::multimap<unsigned short,SPSReqAttr*>::iterator iterPSAttrList;
 	SPSReqAttr *psoAttr;
 	unsigned short usAttrLen;
 	char mcCoASrvrIP[32];
-	std::map<std::string,SSrvParam*>::iterator iterSrvParam = g_mapServers.end ();
+	std::map<std::string,SSrvParam*>::iterator iterSrvParam;
 
 	iterPSAttrList = p_ummapPSAttr.find (PS_NASIP);
 	if (iterPSAttrList == p_ummapPSAttr.end()) {
@@ -923,7 +922,7 @@ int MakeUserNameAttr (const char *p_pszUserName, SCommandParam *p_psoCmdParam, u
 	pcszTmp = strstr (p_pszUserName, "@");
 	/* если реалма нет в имени пользователя */
 	if (NULL == pcszTmp) {
-		std::map<u_long,std::string>::iterator iterDefRealm = g_mapDefRealms.end ();
+		std::map<u_long,std::string>::iterator iterDefRealm;
 		iterDefRealm = g_mapDefRealms.find (p_ulFrom);
 		/* если реалм по умолчанию задан */
 		if (iterDefRealm != g_mapDefRealms.end()) {
@@ -965,7 +964,6 @@ int MakeUserPswdAttr (const char *p_pszUserPswd, SCommandParam *p_psoCmdParam, c
 	unsigned char mucResult[144];	/* Зашифрованный пароль*/
 	unsigned int uiResLen;			/* Длина зашифрованного пароля*/
 
-	psoAttr = NULL;
 	pmucSequence = NULL;
 	pmucPswd = NULL;
 	uiResLen = 0;
@@ -977,18 +975,16 @@ int MakeUserPswdAttr (const char *p_pszUserPswd, SCommandParam *p_psoCmdParam, c
 	uiPartCnt = stPswdLen / 16;
 	uiPartCnt += (stPswdLen % 16) == 0 ? 0 : 1;
 
-	pmucPswd = (unsigned char*) malloc (uiPartCnt * 16);
-	/*	Заполняем пароль нулевыми символами */
-	memset (pmucPswd, 0, uiPartCnt * 16);
+  /* выделяем блок памяти, инициализованный нулями */
+	pmucPswd = (unsigned char*) calloc (uiPartCnt, 16);
 	/*	Копируем пароль пользователя */
 	memcpy (pmucPswd, p_pszUserPswd, stPswdLen);
 
 	stSecretLen = strlen (p_szSecretKey);
 	stSeqLen = stSecretLen + 16;
-	pmucSequence = (unsigned char*) malloc (stSeqLen);
 
-	/*	Заполняем хэшируемую последовательность нулевыми символами (только для первой итерации) */
-	memset (pmucSequence, 0, stSeqLen);
+	/* выделяем блок памяти для хэшируемой последовательности заполненную нулями */
+	pmucSequence = (unsigned char*) сalloc (stSeqLen, 1);
 	/*	Копируем секретный ключ в хэшируемую последовательность */
 	memcpy (pmucSequence, p_szSecretKey, stSecretLen);
 
@@ -1065,7 +1061,7 @@ int MakeAccountInfoAttr (const char *p_pszAccountInfo, SCommandParam *p_psoCmdPa
 	char mcBuf[0x100];
 	SVSAAttr *psoVSAAttr;
 
-	psoVSAAttr = (SVSAAttr*) mcBuf;
+	psoVSAAttr = reinterpret_cast<SVSAAttr*> (mcBuf);
 
 	MakeVSAAttr (psoVSAAttr, (unsigned int) 9, (unsigned char) 250, p_pszAccountInfo, strlen (p_pszAccountInfo));
 
@@ -1096,7 +1092,7 @@ int MakeCommandAttr (const char *p_pszCommand, SCommandParam *p_psoCmdParam)
 		++pszSubValue;
 	}
 
-	psoVSAAttr = (SVSAAttr*) mcBuf;
+	psoVSAAttr = reinterpret_cast<SVSAAttr*> (mcBuf);
 
 	if (0 == strcmp (CMD_ACCNT_LOGON, p_pszCommand)) { /* Account-Logon */
 		if (pszSubValue) {
@@ -1226,7 +1222,7 @@ int AnalyseResponse (unsigned char *p_pmucResp, char *p_pmcRem)
 		unsigned short usPackSize;
 
 		/* Проверяем код ответа*/
-		psoRadHdr = (SRadiusHeader*) p_pmucResp;
+		psoRadHdr = reinterpret_cast<SRadiusHeader*> (p_pmucResp);
 		switch (psoRadHdr->m_ucCode) {
 			default:
 			case 40:
@@ -1240,7 +1236,7 @@ int AnalyseResponse (unsigned char *p_pmucResp, char *p_pmcRem)
 				break;
 			case 42:
 			case 45:
-				sprintf (p_pmcRem, "coas: AnalyseResponse: CoA-NAK received", psoRadHdr->m_ucCode);
+				sprintf (p_pmcRem, "coas: AnalyseResponse: [%u] CoA-NAK received", (unsigned int) psoRadHdr->m_ucCode);
 				iRetVal = -45;
 				break;
 		}
@@ -1252,29 +1248,25 @@ int AnalyseResponse (unsigned char *p_pmucResp, char *p_pmcRem)
 
 int ApplyConf () {
 	int iRetVal = 0;
-	int iFnRes;
 	std::string strVal;
 	std::vector<std::string> vectValueList;
 
 	do {
 		/*	Разбираем параметры */
 		/* log file name */
-		iFnRes = g_coConf.GetParamValue ("logfile", g_strServiceLog);
-		if (iFnRes) {
+		if (g_coConf.GetParamValue ("logfile", g_strServiceLog)) {
 			printf ("ApplyConf: 'logfile' not defined");
 			iRetVal = -1;
 			break;
 		}
 		/* coa-sensor ip-address */
-		iFnRes = g_coConf.GetParamValue ("coa_sensor_ip", g_strCoASensorIp);
-		if (iFnRes) {
+		if (g_coConf.GetParamValue ("coa_sensor_ip", g_strCoASensorIp)) {
 			printf ("ApplyConf: 'coa_sensor_ip' not defined");
 			iRetVal = -1;
 			break;
 		}
 		/* coa-sensor port */
-		iFnRes = g_coConf.GetParamValue ("coa_sensor_port", strVal);
-		if (iFnRes) {
+		if (g_coConf.GetParamValue ("coa_sensor_port", strVal)) {
 			printf ("ApplyConf: 'coa_sensor_ip' not defined");
 			iRetVal = -1;
 			break;
@@ -1282,61 +1274,53 @@ int ApplyConf () {
 				g_usCoASensorPort = strtol (strVal.c_str(), 0, 10);
 		}
 		/* RADIUS request time out */
-		iFnRes = g_coConf.GetParamValue ("radreqtimeout", strVal);
-		if (iFnRes) {
+		if (g_coConf.GetParamValue ("radreqtimeout", strVal)) {
 			g_iRadReqTimeout = 5;
 		} else {
 				g_iRadReqTimeout = strtol (strVal.c_str(), 0, 10);
 		}
 		/* DB user name */
-		iFnRes = g_coConf.GetParamValue ("db_user", g_strDBUser);
-		if (iFnRes) {
+		if (g_coConf.GetParamValue ("db_user", g_strDBUser)) {
 			printf ("ApplyConf: 'db_user' not defined");
 			iRetVal = -1;
 			break;
 		}
 		/* DB user password */
-		iFnRes = g_coConf.GetParamValue ("db_pswd", g_strDBPswd);
-		if (iFnRes) {
+		if (g_coConf.GetParamValue ("db_pswd", g_strDBPswd)) {
 			printf ("ApplyConf: 'db_pswd' not defined");
 			iRetVal = -1;
 			break;
 		}
 		/* DB host name */
-		iFnRes = g_coConf.GetParamValue ("db_host", g_strDBHost);
-		if (iFnRes) {
+		if (g_coConf.GetParamValue ("db_host", g_strDBHost)) {
 			printf ("ApplyConf: 'db_host' not defined");
 			iRetVal = -1;
 			break;
 		}
 		/* DB port */
-		iFnRes = g_coConf.GetParamValue ("db_port", g_strDBPort);
-		if (iFnRes) {
+		if (g_coConf.GetParamValue ("db_port", g_strDBPort)) {
 			printf ("ApplyConf: 'db_port' not defined");
 			iRetVal = -1;
 			break;
 		}
 		/* DB service */
-		iFnRes = g_coConf.GetParamValue ("db_srvc", g_strDBSrvc);
-		if (iFnRes) {
+		if (g_coConf.GetParamValue ("db_srvc", g_strDBSrvc)) {
 			printf ("ApplyConf: 'db_srvc' not defined");
 			iRetVal = -1;
 			break;
 		}
 		/* NAS list query */
-		iFnRes = g_coConf.GetParamValue ("qr_nas_list", g_strNASQuery);
-		if (iFnRes) {
+		if (g_coConf.GetParamValue ("qr_nas_list", g_strNASQuery)) {
 			printf ("ApplyConf: 'qr_nas_list' not defined");
 			iRetVal = -1;
 			break;
 		}
 		/* default realm list */
-		iFnRes = g_coConf.GetParamValue ("def_realm", vectValueList);
-		if (0 == iFnRes) {
+		if (0 == g_coConf.GetParamValue ("def_realm", vectValueList)) {
 			in_addr inetAddr;
 			std::string strIpAddr, strRealm;
 			size_t stPos;
-			for (std::vector<std::string>::iterator iter = vectValueList.begin(); iter != vectValueList.end(); iter++) {
+			for (std::vector<std::string>::iterator iter = vectValueList.begin(); iter != vectValueList.end(); ++iter) {
 				strVal = *iter;
 				stPos = strVal.find_first_of ('@');
 				if (stPos == std::string::npos) { continue; }
@@ -1349,11 +1333,10 @@ int ApplyConf () {
 			vectValueList.clear ();
 		}
 		/* service rename rules */
-		iFnRes = g_coConf.GetParamValue ("srvc_rename", vectValueList);
-		if (0 == iFnRes) {
+		if (0 == g_coConf.GetParamValue ("srvc_rename", vectValueList)) {
 			std::string strSrvName, strNewName;
 			size_t stPos;
-			for (std::vector<std::string>::iterator iter = vectValueList.begin(); iter != vectValueList.end(); iter++) {
+			for (std::vector<std::string>::iterator iter = vectValueList.begin(); iter != vectValueList.end(); ++iter) {
 				strVal = *iter;
 				stPos = strVal.find_first_of ('=');
 				if (stPos == std::string::npos) { continue; }
@@ -1365,9 +1348,8 @@ int ApplyConf () {
 			vectValueList.clear ();
 		}
 		/* service prefix list */
-		iFnRes = g_coConf.GetParamValue ("srvc_rename_prefix", vectValueList);
-		if (0 == iFnRes) {
-			for (std::vector<std::string>::iterator iter = vectValueList.begin(); iter != vectValueList.end(); iter++) {
+		if (0 == g_coConf.GetParamValue ("srvc_rename_prefix", vectValueList)) {
+			for (std::vector<std::string>::iterator iter = vectValueList.begin(); iter != vectValueList.end(); ++iter) {
 				strVal = *iter;
 				if (0 == strVal.length ()) { continue; }
 				g_vectSrvcPrfx.push_back (strVal);
@@ -1375,38 +1357,33 @@ int ApplyConf () {
 			vectValueList.clear ();
 		}
 		/* trunc service name flag */
-		iFnRes = g_coConf.GetParamValue ("trunc_srvc_name", strVal);
-		if (0 == iFnRes) {
+		if (0 == g_coConf.GetParamValue ("trunc_srvc_name", strVal)) {
 			g_iTruncSrvcName = atoi (strVal.c_str());
 		}
 		/*rename service flag */
-		iFnRes = g_coConf.GetParamValue ("rename_srvc", strVal);
-		if (0 == iFnRes) {
+		if (0 == g_coConf.GetParamValue ("rename_srvc", strVal)) {
 				g_iRenameSrvc = atoi (strVal.c_str());
 		}
 		/* OS user name */
-		iFnRes = g_coConf.GetParamValue ("user", g_strUser);
+		g_coConf.GetParamValue ("user", g_strUser);
 		/* OS user group */
-		iFnRes = g_coConf.GetParamValue ("group", g_strGroup);
+		g_coConf.GetParamValue ("group", g_strGroup);
 		/* thread count */
-		iFnRes = g_coConf.GetParamValue ("thrdcnt", strVal);
-		if (0 == iFnRes) {
+		if (0 == g_coConf.GetParamValue ("thrdcnt", strVal)) {
 			g_uiThrdCnt = atol (strVal.c_str());
 			if (0 == g_uiThrdCnt) { g_uiThrdCnt =1; }
 		} else {
 			g_uiThrdCnt = 1;
 		}
 		/* TCP queue length */
-		iFnRes = g_coConf.GetParamValue ("queuelen", strVal);
-		if (0 == iFnRes) {
+		if (0 == g_coConf.GetParamValue ("queuelen", strVal)) {
 			g_uiQueueLen = atol (strVal.c_str());
 			if (0 == g_uiQueueLen) { g_uiQueueLen =1; }
 		} else {
 			g_uiQueueLen = 1;
 		}
 		/* debug */
-		iFnRes = g_coConf.GetParamValue ("debug", strVal);
-		if (0 == iFnRes) {
+		if (0 == g_coConf.GetParamValue ("debug", strVal)) {
 			g_uiDebug = atol (strVal.c_str());
 		} else {
 			g_uiDebug = 0;
@@ -1418,12 +1395,7 @@ int ApplyConf () {
 
 void ChangeOSUserGroup ()
 {
-	size_t stStrLen;
-	char mcCmd[256];
-	char mcCmdRes[256];
-	FILE *psoFile;
 	int iFnRes;
-	const char *pszUser, *pszGroup;
 	passwd *psoPswd;
 	group *psoGroup;
 	gid_t idUser, idGroup;
@@ -1432,8 +1404,7 @@ void ChangeOSUserGroup ()
 	// изменяем id пользователя ОС
 	iFnRes = g_coConf.GetParamValue ("user", strVal);
 	if (0 == iFnRes) {
-		pszUser = strVal.c_str();
-		psoPswd = getpwnam (pszUser);
+		psoPswd = getpwnam (strVal.c_str());
 		if (psoPswd) {
 			idUser = psoPswd->pw_uid;
 		} else {
@@ -1444,8 +1415,7 @@ void ChangeOSUserGroup ()
 	strVal.clear();
 	iFnRes = g_coConf.GetParamValue ("group", strVal);
 	if (0 == iFnRes) {
-		pszGroup = strVal.c_str();
-		psoGroup = getgrnam (pszGroup);
+		psoGroup = getgrnam (strVal.c_str());
 		if (psoGroup) {
 			idGroup = psoGroup->gr_gid;
 		} else {
@@ -1576,7 +1546,7 @@ int RequestOperateAdminReq (std::multimap<unsigned short,SPSReqAttr*> &p_mmapAtt
 
 	do {
 		CPSPacket coPSPack;
-		std::multimap<unsigned short,SPSReqAttr*>::iterator iterAttrList = p_mmapAttrList.end ();
+		std::multimap<unsigned short,SPSReqAttr*>::iterator iterAttrList;
 		std::basic_string<char> bstrPSCmd;
 		__uint16_t ui16AttrLen;
 

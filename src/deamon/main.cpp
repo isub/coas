@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
 	/*
 	 *  Disconnect from session
 	 */
-	if (iDontFork == false) {
+	if (iDontFork == 0) {
 		pid_t pid = fork();
 
 		if (pid < 0) {
@@ -169,7 +169,7 @@ int main(int argc, char *argv[])
 	 *  And write it AFTER we've forked, so that we write the
 	 *  correct PID.
 	 */
-	if (iDontFork == false) {
+	if (iDontFork == 0) {
 		FILE *fp;
 
 		fp = fopen(g_soMainCfg.m_pszPidFile, "w");
@@ -248,7 +248,7 @@ int main(int argc, char *argv[])
 	 *	file.  (If it doesn't exist, we can ignore
 	 *	the error returned by unlink)
 	 */
-	if (iDontFork == false) {
+	if (iDontFork == 0) {
 		unlink(g_soMainCfg.m_pszPidFile);
 	}
 

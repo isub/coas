@@ -127,7 +127,7 @@ success:
 	m_msoPackQueue[uiPackId].m_usRecvDataLen = 0;
 
 	/*	Initialization of Radius header */
-	psoTmpPtr = (SRadiusHeader*)m_msoPackQueue[uiPackId].m_mucSendBuf;
+	psoTmpPtr = reinterpret_cast<SRadiusHeader*>(m_msoPackQueue[uiPackId].m_mucSendBuf);
 	psoTmpPtr->m_ucCode = p_ucCode;
 	psoTmpPtr->m_ucIdentifier = (unsigned char)uiPackId;
 	psoTmpPtr->m_usLength = sizeof(*psoTmpPtr) - sizeof(psoTmpPtr->m_msoAttributes);
@@ -151,14 +151,11 @@ int CRadiusClient::AddAttr(
 	}
 
 	if (! m_msoPackQueue[p_uiReqId].m_vbIsUsed) {
-		char mcRem[128];
-		int iRemLen;
-
 		g_coLog.WriteLog ("radiusclient: AddAttr: packet id '%d' is not used", p_uiReqId);
 		return -1;
 	}
 
-	psoRadHdr = (SRadiusHeader*)(m_msoPackQueue[p_uiReqId].m_mucSendBuf);
+	psoRadHdr = reinterpret_cast<SRadiusHeader*>(m_msoPackQueue[p_uiReqId].m_mucSendBuf);
 	memcpy(
 		&(m_msoPackQueue[p_uiReqId].m_mucSendBuf[psoRadHdr->m_usLength]),
 		p_psoRadiusAttr,
@@ -197,6 +194,14 @@ int CRadiusClient::SendPack(
 			break;
 		}
 
+		/*	Проверка значения id пакета RADIUS
+		 */
+		if (0x100 <= p_uiReqId) {
+			g_coLog.WriteLog ("radiusclient: SendPack: invalid packet id: '%d'", p_uiReqId);
+			iRetVal -1;
+			break;
+		}
+
 		/* создаем сокет для взаимодействия с CoA-сервером */
 		m_msoPackQueue[p_uiReqId].m_iCoASrvrSock = CreateCoASrvrSock();
 		if (-1 == m_msoPackQueue[p_uiReqId].m_iCoASrvrSock) {
@@ -209,15 +214,7 @@ int CRadiusClient::SendPack(
 
 		/*	Преобразовываем указатель
 		 */
-		psoTmpPtr = (SRadiusHeader*)m_msoPackQueue[p_uiReqId].m_mucSendBuf;
-
-		/*	Проверка значения id пакета RADIUS
-		 */
-		if (0x100 <= p_uiReqId) {
-			g_coLog.WriteLog ("radiusclient: SendPack: invalid packet id: '%d'", p_uiReqId);
-			iRetVal -1;
-			break;
-		}
+		psoTmpPtr = reinterpret_cast<SRadiusHeader*>(m_msoPackQueue[p_uiReqId].m_mucSendBuf);
 
 		/*	Проверка используемости пакета
 		 */
@@ -236,7 +233,7 @@ int CRadiusClient::SendPack(
 		/*	Проверка размера пакета
 		 */
 		if (uiPackLen < 20
-			&& uiPackLen > 4096) {
+			|| uiPackLen > 4096) {
 				g_coLog.WriteLog ("radiusclient: SendPack: packet id: '%u'; invalid size: '%u'", p_uiReqId, uiPackLen);
 				break;
 		}
@@ -290,7 +287,8 @@ int CRadiusClient::SendPack(
 				*mcErr = 0;
 			}
 			iRemLen = sprintf (p_pmcRem, "radiusclient: SendPack: sendto packet id '%u' error: '%d': '%s'", p_uiReqId, iErrCode, mcErr);
-			g_coLog.Dump (p_pmcRem);
+			if (0 < iRemLen)
+        g_coLog.Dump (p_pmcRem);
 			break;
 		}
 
@@ -387,7 +385,7 @@ unsigned int CRadiusClient::GetPackLen (unsigned char* p_pucRadPack)
 	unsigned int uiRetVal;
 	SRadiusHeader *psoRadiusHdr;
 
-	psoRadiusHdr = (SRadiusHeader*)p_pucRadPack;
+	psoRadiusHdr = reinterpret_cast<SRadiusHeader*>(p_pucRadPack);
 	uiRetVal = ntohs (psoRadiusHdr->m_usLength);
 
 	return uiRetVal;
@@ -421,7 +419,7 @@ unsigned char* CRadiusClient::EnumAttr(
 	unsigned int uiPackLen;
 	unsigned int uiAttrValLen;
 	SRadiusAttribute *psoRadAttr;
-	static char mcPwdPad[] = "***************************************************************************************************************************************************************************************************************************************************************";
+	static char mcPwdPad[] = "********";
 
 	/* !!! отсутствует проверка размера содержимого буфера p_pucRadPack !!! */
 
@@ -462,6 +460,7 @@ unsigned char* CRadiusClient::EnumAttr(
 	if (p_pszAttrValue) {
 		switch (msoAttrDetails[psoRadAttr->m_ucType].m_eAttrType) {
 		case eADT_Password:
+      uiAttrValLen = uiAttrValLen > sizeof(mcPwdPad) - 1 ? sizeof(mcPwdPad) - 1 : uiAttrValLen;
 			memcpy (p_pszAttrValue, mcPwdPad, uiAttrValLen);
 			p_pszAttrValue[uiAttrValLen] = '\0';
 			break; /* eADT_Password */
@@ -580,7 +579,7 @@ bool CRadiusClient::CheckAuthenticator(
 				/*	Записываем в аутентификатор нули
 				 */
 				memset(
-					((SRadiusHeader*)pmucData)->m_mucAuthenticator,
+					(reinterpret_cast<SRadiusHeader*>(pmucData))->m_mucAuthenticator,
 					0,
 					sizeof(p_psoRadHdr->m_mucAuthenticator));
 				break;
@@ -591,9 +590,9 @@ bool CRadiusClient::CheckAuthenticator(
 				/*	Копируем аутентификатор запроса
 				 */
 				memcpy(
-					((SRadiusHeader*)pmucData)->m_mucAuthenticator,
-					((SRadiusHeader*)(m_msoPackQueue[p_psoRadHdr->m_ucIdentifier].m_mucSendBuf))->m_mucAuthenticator,
-					sizeof(((SRadiusHeader*)pmucData)->m_mucAuthenticator));
+					(reinterpret_cast<SRadiusHeader*>(pmucData))->m_mucAuthenticator,
+					(reinterpret_cast<SRadiusHeader*>(m_msoPackQueue[p_psoRadHdr->m_ucIdentifier].m_mucSendBuf))->m_mucAuthenticator,
+					sizeof((reinterpret_cast<SRadiusHeader*>(pmucData))->m_mucAuthenticator));
 				break;
 		}
 
@@ -639,7 +638,7 @@ int CRadiusClient::ParsePacket (unsigned char *p_pucBuf, char *p_pszOut, int *p_
 	unsigned int uiPackLen;
 	int iFnRes;
 
-	psoRadiusHdr = (SRadiusHeader*)p_pucBuf;
+	psoRadiusHdr = reinterpret_cast<SRadiusHeader*>(p_pucBuf);
 
 	uiPackLen = GetPackLen (p_pucBuf);
 
@@ -804,7 +803,7 @@ int CRadiusClient::RecvCoASrvrResp (int p_iReqId)
 
 		SRadiusHeader *psoRadHdr;
 
-		psoRadHdr = (SRadiusHeader*)mcBuf;
+		psoRadHdr = reinterpret_cast<SRadiusHeader*>(mcBuf);
 
 		iParsPackLen = 0;
 
