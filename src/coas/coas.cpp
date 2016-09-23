@@ -21,12 +21,12 @@
 
 #include "../md5/md5.h"
 #include "../radiusclient/radius.h"
-#include "../../../utils/log/log.h"
-#include "../../../utils/coacommon.h"
-#include "../../../utils/pspacket/pspacket.h"
-#include "../../../utils/config/config.h"
-#define OTL_ORA10G
-#include "../../../utils/otlv4.h"
+#include "utils/log/log.h"
+#include "utils/coacommon.h"
+#include "utils/pspacket/pspacket.h"
+#include "utils/config/config.h"
+#define OTL_ORA12C
+#include "utils/otlv4.h"
 #include "coas.h"
 
 CLog g_coLog;
@@ -66,8 +66,8 @@ unsigned int g_uiThrdCnt;	/* количество программных пот�
 unsigned int g_uiQueueLen;	/* длина очереди TCP-подккючений */
 unsigned int g_uiDebug; /* глубина отладки */
 
-timeval g_sotvLastSuccess = {0};
-timeval g_sotvLastError = {0};
+timeval g_sotvLastSuccess = { 0, 0 };
+timeval g_sotvLastError = { 0, 0 };
 
 /* семафор для ожидания свободных потоков */
 static sem_t g_tSem;
@@ -563,7 +563,7 @@ void* RequestOperate (void* p_pvParam)
 					mcIpAddr,
 					(unsigned int)ntohs(psoConnInfo->m_soFrom.sin_port));
 				if (0 < iRemLen) {
-					if (iRemLen > sizeof (mcRem) - 1) {
+					if (static_cast<size_t>(iRemLen) > sizeof (mcRem) - 1) {
 						iRemLen = sizeof (mcRem) - 1;
 					}
 				} else {
@@ -573,7 +573,7 @@ void* RequestOperate (void* p_pvParam)
 				for (int i = 0; i < psoConnInfo->m_iReqLen; ++i) {
 					iFnRes = snprintf (&(mcRem[iRemLen]), sizeof (mcRem) - 1 - iRemLen, "%02x", (unsigned int)psoConnInfo->m_mcPSReq[i]);
 					if (0 < iFnRes) {
-						if (iFnRes > sizeof (mcRem) - 1 - iRemLen) {
+						if (static_cast<size_t>(iFnRes) > sizeof (mcRem) - 1 - iRemLen) {
 							iFnRes = sizeof (mcRem) - 1 - iRemLen;
 							iRemLen += iFnRes;
 							break;
@@ -600,7 +600,7 @@ void* RequestOperate (void* p_pvParam)
 				(unsigned int)htons(psoConnInfo->m_soFrom.sin_port),
 				iFnRes);
 			if (0 < iRemLen) {
-				if (iRemLen > sizeof (mcRem) - 1) {
+				if (static_cast<size_t>(iRemLen) > sizeof (mcRem) - 1) {
 					iRemLen = sizeof (mcRem) - 1;
 				}
 			} else {
@@ -610,7 +610,7 @@ void* RequestOperate (void* p_pvParam)
 			/* получаем текстовое представление запроса */
 			iFnRes = coPSPack.Parse (psoPSReq, psoConnInfo->m_iReqLen, mcParsedPSPack, sizeof(mcParsedPSPack));
 			if (0 < iFnRes) {
-				int iStrLen = sizeof (mcRem) - iRemLen - 1 > iFnRes ? iFnRes : sizeof(mcRem) - iRemLen - 1;
+				int iStrLen = sizeof (mcRem) - iRemLen - 1 > static_cast<size_t>(iFnRes) ? iFnRes : sizeof(mcRem) - iRemLen - 1;
 				memcpy (&(mcRem[iRemLen]), mcParsedPSPack, iStrLen);
 				iRemLen += iStrLen;
 				mcRem[iRemLen] = '\0';
@@ -686,7 +686,7 @@ void* RequestOperate (void* p_pvParam)
 			/* если буфер успешно заполнен */
 			if (0 < iRemLen) {
 				/* если не вся строка уместилась в буфер */
-				if (iRemLen > sizeof(mcRem) - 1) {
+				if (static_cast<size_t>(iRemLen) > sizeof(mcRem) - 1) {
 					iRemLen = sizeof(mcRem) - 1;
 					mcRem[iRemLen] = '\0';
 				}
@@ -695,7 +695,7 @@ void* RequestOperate (void* p_pvParam)
 			}
 			iFnRes = coPSPack.Parse (psoPSResp, iFnRes, mcParsedPSPack, sizeof(mcParsedPSPack));
 			if (0 < iFnRes) {
-				size_t stStrLen = sizeof(mcRem) - iRemLen -1 > iFnRes ? iFnRes : sizeof(mcRem) - iRemLen -1;
+				size_t stStrLen = sizeof(mcRem) - iRemLen -1 > static_cast<size_t>(iFnRes) ? iFnRes : sizeof(mcRem) - iRemLen -1;
 				memcpy (&mcRem[iRemLen], mcParsedPSPack, stStrLen);
 				iRemLen += stStrLen;
 				mcRem[iRemLen] = '\0';
@@ -748,12 +748,9 @@ int SendRequest (std::multimap<unsigned short,SPSReqAttr*> &p_mmapPSAttrList, SC
 	}
 	int iRetVal = 0;
 	SCommandParam soCmdParam;
-	SPSRequest *psoPSReq;
 	SPSReqAttr *psoPSReqAttr;
-	unsigned short usPackLen;
 	unsigned short usAttrLen;
 	unsigned int uiBufSize;
-	int iMsgLen;
 	std::multimap<unsigned short,SPSReqAttr*>::iterator iterAttrList = p_mmapPSAttrList.end ();
 
 	do {
@@ -934,7 +931,7 @@ int MakeUserNameAttr (const char *p_pszUserName, SCommandParam *p_psoCmdParam, u
 		iStrLen = snprintf ((char *) psoAttr->m_mucValue, sizeof (mcBuf) - sizeof (*psoAttr), "%s", p_pszUserName);
 	}
 
-	if (0 >= iStrLen || iStrLen > sizeof (mcBuf) - sizeof (*psoAttr)) {
+	if (0 >= iStrLen || static_cast<size_t>(iStrLen) > sizeof (mcBuf) - sizeof (*psoAttr)) {
 		return -1;
 	}
 
@@ -954,7 +951,7 @@ int MakeUserPswdAttr (const char *p_pszUserPswd, SCommandParam *p_psoCmdParam, c
 	int iRetVal = 0;
 	char mcBuf[0x100];
 	SRadiusAttribute *psoAttr;
-	unsigned char *pmucSequence;	/* Хэшируемая последовательность */
+	unsigned char *pucSequence;	/* Хэшируемая последовательность */
 	unsigned char mucDigest[16];	/* Хэш последовательности*/
 	unsigned char *pmucPswd;		/* Шифруемый пароль*/
 	unsigned int uiPartCnt;			/* Количество 16-октетных частей пароля*/
@@ -964,7 +961,7 @@ int MakeUserPswdAttr (const char *p_pszUserPswd, SCommandParam *p_psoCmdParam, c
 	unsigned char mucResult[144];	/* Зашифрованный пароль*/
 	unsigned int uiResLen;			/* Длина зашифрованного пароля*/
 
-	pmucSequence = NULL;
+	pucSequence = NULL;
 	pmucPswd = NULL;
 	uiResLen = 0;
 
@@ -982,11 +979,10 @@ int MakeUserPswdAttr (const char *p_pszUserPswd, SCommandParam *p_psoCmdParam, c
 
 	stSecretLen = strlen (p_szSecretKey);
 	stSeqLen = stSecretLen + 16;
-
-	/* выделяем блок памяти для хэшируемой последовательности заполненную нулями */
-	pmucSequence = (unsigned char*) сalloc (stSeqLen, 1);
-	/*	Копируем секретный ключ в хэшируемую последовательность */
-	memcpy (pmucSequence, p_szSecretKey, stSecretLen);
+  /* выделяем под последовательность блок памяти, инициализированный нулями */
+  pucSequence = reinterpret_cast<unsigned char*> (calloc (stSeqLen, 1));
+	/* Копируем секретный ключ в хэшируемую последовательность */
+	memcpy (pucSequence, p_szSecretKey, stSecretLen);
 
 	md5::md5_context soMD5Ctx;
 	unsigned int uiIterCnt;
@@ -996,11 +992,11 @@ int MakeUserPswdAttr (const char *p_pszUserPswd, SCommandParam *p_psoCmdParam, c
 	do {
 		if (uiIterCnt) {
 			/*	Копируем C[i-1] в хэшируемую последовательность */
-			memcpy (&(pmucSequence[stSecretLen]), &(mucResult[uiIterCnt*16]), 16);
+			memcpy (&(pucSequence[stSecretLen]), &(mucResult[uiIterCnt*16]), 16);
 		}
 
 		md5::md5_starts (&soMD5Ctx);
-		md5::md5_update (&soMD5Ctx, pmucSequence, stSeqLen);
+		md5::md5_update (&soMD5Ctx, pucSequence, stSeqLen);
 		md5::md5_finish (&soMD5Ctx, mucDigest);
 
 		for (int i=0; i<16; ++i) {
@@ -1022,8 +1018,8 @@ int MakeUserPswdAttr (const char *p_pszUserPswd, SCommandParam *p_psoCmdParam, c
 		free (pmucPswd);
 	}
 
-	if (pmucSequence) {
-		free (pmucSequence);
+	if (pucSequence) {
+		free (pucSequence);
 	}
 
 	return iRetVal;
@@ -1100,7 +1096,7 @@ int MakeCommandAttr (const char *p_pszCommand, SCommandParam *p_psoCmdParam)
 		} else {
 			iFnRes = snprintf (mcValue, sizeof (mcValue) - 1, "\x01");
 		}
-		if (0 > iFnRes || iFnRes > sizeof (mcValue) - 1) {
+		if (0 > iFnRes || static_cast<size_t>(iFnRes) > sizeof (mcValue) - 1) {
 			iFnRes = 0;
 		}
 		uiVendorId = (unsigned int) 9;
@@ -1111,14 +1107,14 @@ int MakeCommandAttr (const char *p_pszCommand, SCommandParam *p_psoCmdParam)
 		} else {
 			iFnRes = snprintf (mcValue, sizeof (mcValue) - 1, "\x02");
 		}
-		if (0 > iFnRes || iFnRes > sizeof (mcValue) - 1) {
+		if (0 > iFnRes || static_cast<size_t>(iFnRes) > sizeof (mcValue) - 1) {
 			iFnRes = 0;
 		}
 		uiVendorId = (unsigned int) 9;
 		ucVendorType = (unsigned char) 252;
 	} else if (0 == strcmp (CMD_SESSION_QUERY, p_pszCommand)) { /* Session-Query */
 		iFnRes = snprintf (mcValue, sizeof (mcValue) - 1, "\x04\x20");
-		if (0 > iFnRes || iFnRes > sizeof (mcValue) - 1) {
+		if (0 > iFnRes || static_cast<size_t>(iFnRes) > sizeof (mcValue) - 1) {
 			iFnRes = 0;
 		}
 		uiVendorId = (unsigned int) 9;
@@ -1126,7 +1122,7 @@ int MakeCommandAttr (const char *p_pszCommand, SCommandParam *p_psoCmdParam)
 	} else if (0 == strcmp (CMD_SRV_ACTIVATE, p_pszCommand)) { /* Service-Activate */
 		if (pszSubValue) {
 			iFnRes = snprintf (mcValue, sizeof (mcValue) - 1, "\x0b%s", pszSubValue);
-			if (0 > iFnRes || iFnRes > sizeof (mcValue) - 1) {
+			if (0 > iFnRes || static_cast<size_t>(iFnRes) > sizeof (mcValue) - 1) {
 				iFnRes = 0;
 			}
 			uiVendorId = (unsigned int) 9;
@@ -1137,7 +1133,7 @@ int MakeCommandAttr (const char *p_pszCommand, SCommandParam *p_psoCmdParam)
 	} else if (0 == strcmp (CMD_SRV_DEACTIVATE, p_pszCommand)) { /* Service-Deactivate */
 		if (pszSubValue) {
 			iFnRes = snprintf (mcValue, sizeof (mcValue) - 1, "\x0c%s", pszSubValue);
-			if (0 > iFnRes || iFnRes > sizeof (mcValue) - 1) {
+			if (0 > iFnRes || static_cast<size_t>(iFnRes) > sizeof (mcValue) - 1) {
 				iFnRes = 0;
 			}
 			uiVendorId = (unsigned int) 9;
@@ -1151,7 +1147,6 @@ int MakeCommandAttr (const char *p_pszCommand, SCommandParam *p_psoCmdParam)
 			if (NULL == pszSubValue) { iRetVal = -1; break; }
 			char *pszTag;
 			unsigned char ucTag;
-			int iStrLen;
 			/* ищем тэг*/
 			pszTag = strstr (pszSubValue, ":");
 			if (NULL == pszTag) { iRetVal = -1; break; }
@@ -1164,9 +1159,8 @@ int MakeCommandAttr (const char *p_pszCommand, SCommandParam *p_psoCmdParam)
 			/* получаем значение тэга*/
 			ucTag = (unsigned char) atol (pszTag);
 			mcValue[0] = ucTag;
-			iStrLen = 1;
 			iFnRes = snprintf (&mcValue[1], sizeof (mcValue) - 2, "%s", pszSubValue);
-			if (0 < iFnRes || iFnRes > sizeof (mcValue) - 2) {
+			if (0 < iFnRes || static_cast<size_t>(iFnRes) > sizeof (mcValue) - 2) {
 				iFnRes = 0;
 			}
 			uiVendorId = (unsigned int) 4874;
@@ -1176,7 +1170,7 @@ int MakeCommandAttr (const char *p_pszCommand, SCommandParam *p_psoCmdParam)
 		do {
 			if (NULL == pszSubValue) { iRetVal = -1; break; }
 			iFnRes = snprintf (mcValue, sizeof (mcValue) - 1, "%s", pszSubValue);
-			if (0 > iFnRes || iFnRes > sizeof (mcValue) - 1) {
+			if (0 > iFnRes || static_cast<size_t>(iFnRes) > sizeof (mcValue) - 1) {
 				iFnRes = 0;
 			}
 			uiVendorId = (unsigned int) 4874;
@@ -1217,9 +1211,6 @@ int AnalyseResponse (unsigned char *p_pmucResp, char *p_pmcRem)
 
 	do {
 		SRadiusHeader *psoRadHdr;
-		SRadiusAttribute *psoRadAttr;
-		SVSAAttr *psoRadVSAAttr;
-		unsigned short usPackSize;
 
 		/* Проверяем код ответа*/
 		psoRadHdr = reinterpret_cast<SRadiusHeader*> (p_pmucResp);
@@ -1435,8 +1426,6 @@ int CreateNASList ()
 {
 	int iRetVal = 0;
 	SSrvParam *psoTmp;
-	char mcNASName[128];
-	char mcSecret[60];
 	int iStrLen;
 	otl_connect coDBConn;
 	char mcConnStr[1024];
@@ -1629,10 +1618,10 @@ int TimeValueToString (timeval &p_soTimeVal, char *p_pmBuf, size_t p_stBufSize)
 			goto conv_failed;
 		}
 		iStrLen = iFnRes;
-		iFnRes = snprintf (&p_pmBuf[iStrLen], p_stBufSize - 1 - iStrLen, ",%03u", p_soTimeVal.tv_usec / 1000);
+		iFnRes = snprintf (&p_pmBuf[iStrLen], p_stBufSize - 1 - iStrLen, ",%03u", static_cast<unsigned int>(p_soTimeVal.tv_usec / 1000));
 		/* если буфер успешно заполнен */
 		if (0 < iFnRes) {
-			if (iFnRes > p_stBufSize - 1 - iStrLen) {
+			if (static_cast<size_t>(iFnRes) > p_stBufSize - 1 - iStrLen) {
 				iFnRes = p_stBufSize - 1 - iStrLen;
 			}
 			iStrLen += iFnRes;
@@ -1646,7 +1635,7 @@ int TimeValueToString (timeval &p_soTimeVal, char *p_pmBuf, size_t p_stBufSize)
 		conv_failed:
 		iFnRes = snprintf (p_pmBuf, p_stBufSize - 1, "0000.00.00 00:00:00,000");
 		if (0 < iFnRes) {
-			if (iFnRes > p_stBufSize - 1) {
+			if (static_cast<size_t>(iFnRes) > p_stBufSize - 1) {
 				iFnRes = p_stBufSize - 1;
 			}
 			iRetVal = iFnRes;
@@ -1686,7 +1675,7 @@ int RequestOperateCommandReq (std::multimap<unsigned short,SPSReqAttr*> &p_mmapA
 		/* Формируем поле Result */
 		iFnRes = snprintf (mcResCode, sizeof (mcResCode) - 1, "%d", iReqRes);
 		if (0 < iFnRes) {
-			if (iFnRes > sizeof (mcResCode) - 1) {
+			if (static_cast<size_t>(iFnRes) > sizeof (mcResCode) - 1) {
 				iFnRes = sizeof (mcResCode) - 1;
 			}
 			coPSPack.AddAttr (p_psoResp, p_stBufSize, PS_RESULT, mcResCode, iFnRes, 0);
@@ -1829,7 +1818,7 @@ int RequestOperateUnsupportedReq (__uint16_t p_ui16ReqType, SPSRequest *p_psoRes
 		/* если буфер успешно заполнен */
 		if (0 < iStrLen) {
 			/* если строка не уместилась в буфере полностью */
-			if (iStrLen > sizeof (mcInfo) - 1) {
+			if (static_cast<size_t>(iStrLen) > sizeof (mcInfo) - 1) {
 				iStrLen = sizeof (mcInfo) - 1;
 			}
 			coPSPack.AddAttr (p_psoResp, p_stBufSize, PS_DESCR, mcInfo, (__uint16_t) iStrLen, 0);

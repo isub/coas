@@ -29,9 +29,9 @@
 #include <vector>
 #include <string>
 
-#include "../../../utils/coacommon.h"
-#include "../../../utils/config/config.h"
-#include "../../../utils/log/log.h"
+#include "utils/coacommon.h"
+#include "utils/config/config.h"
+#include "utils/log/log.h"
 #include "../coas/coas.h"
 #include "main.h"
 
@@ -78,7 +78,6 @@ int main(int argc, char *argv[])
 	int iRetCode = 0;
 	int iArgVal;
 	int iDontFork = false;
-	int iFlag = 0;
 	char *pszConf = NULL;
 
 	struct sigaction soSigAct;
@@ -214,10 +213,10 @@ int main(int argc, char *argv[])
 
 	do {
 		if (InitCoASensor()) {
-			g_coLog.WriteLog ("InitCoASensor failed");
+			UTL_LOG_F(g_coLog, "InitCoASensor failed");
 			break;
 		}
-		g_coLog.WriteLog ("Program initialized successfully");
+		UTL_LOG_N(g_coLog, "Program initialized successfully");
 
 		/*
 		 *	Process requests until HUP or exit.
@@ -231,10 +230,10 @@ int main(int argc, char *argv[])
 	} while (0);
 
 	if (iRetCode < 0) {
-		g_coLog.WriteLog ("Exiting due to internal error");
+		UTL_LOG_F(g_coLog, "Exiting due to internal error");
 		iRetCode = 2;
 	} else {
-		g_coLog.WriteLog ("Exiting normally");
+		UTL_LOG_N(g_coLog, "Exiting normally");
 	}
 
 	/*
@@ -264,7 +263,7 @@ static void sig_handler(int sig)
 	if (getpid() != g_pidPid) _exit(sig);
 
 	SSignalDesc *psoSigDesc = NULL;
-	for (int i = 0; i < sizeof(g_soSigDesc)/sizeof(*g_soSigDesc); ++i) {
+	for (size_t i = 0; i < sizeof(g_soSigDesc)/sizeof(*g_soSigDesc); ++i) {
 		if (g_soSigDesc[i].m_iSigCode == sig) {
 			psoSigDesc = &g_soSigDesc[i];
 			break;
@@ -273,10 +272,10 @@ static void sig_handler(int sig)
 	char cAction;
 	if (psoSigDesc) {
 		cAction = psoSigDesc->m_cAction;
-		g_coLog.WriteLog ("Signal received: code '%d', description '%s'", sig, psoSigDesc->m_pszDescription);
+		UTL_LOG_N(g_coLog, "Signal received: code '%d', description '%s'", sig, psoSigDesc->m_pszDescription);
 	} else {
 		cAction = -1;
-		g_coLog.WriteLog ("Signal received: code '%d'", sig);
+		UTL_LOG_N(g_coLog, "Signal received: code '%d'", sig);
 	}
 	if (g_iEvent != 'T' && g_iEvent != 'A') {
 		g_iEvent = cAction;

@@ -17,7 +17,7 @@
 #include <map>
 
 #include "../md5/md5.h"
-#include "../../../utils/log/log.h"
+#include "utils/log/log.h"
 #include "../coas/coas.h"
 #include "radius.h"
 
@@ -42,7 +42,7 @@ int CRadiusClient::Init()
 {
 	int iRetVal = 0;
 
-	for (int i = 0; i < sizeof(m_msoPackQueue)/sizeof(*m_msoPackQueue); ++i) {
+	for (size_t i = 0; i < sizeof(m_msoPackQueue)/sizeof(*m_msoPackQueue); ++i) {
 		m_msoPackQueue[i].m_iCoASrvrSock = -1;
 	}
 
@@ -190,7 +190,7 @@ int CRadiusClient::SendPack(
 		 */
 		if (! m_vbContSend) {
 			g_coLog.WriteLog ("radiusclient: SendPack: received shutdown command");
-			iRetVal -1;
+			iRetVal = -1;
 			break;
 		}
 
@@ -198,7 +198,7 @@ int CRadiusClient::SendPack(
 		 */
 		if (0x100 <= p_uiReqId) {
 			g_coLog.WriteLog ("radiusclient: SendPack: invalid packet id: '%d'", p_uiReqId);
-			iRetVal -1;
+			iRetVal = -1;
 			break;
 		}
 
@@ -220,7 +220,7 @@ int CRadiusClient::SendPack(
 		 */
 		if (! m_msoPackQueue[p_uiReqId].m_vbIsUsed) {
 			g_coLog.WriteLog ("radiusclient: SendPack: packet id '%d' is not used", p_uiReqId);
-			iRetVal -1;
+			iRetVal = -1;
 			break;
 		}
 
@@ -328,8 +328,6 @@ int CRadiusClient::CreateCoASrvrSock ()
 {
 	int iRetVal = 0;
 	int iCoASrvrSock;
-	char mcMsg[0x2000];
-	int iMsgLen;
 	int iErrCode;
 	char mcErr[2048];
 
@@ -635,12 +633,11 @@ int CRadiusClient::ParsePacket (unsigned char *p_pucBuf, char *p_pszOut, int *p_
 	}
 	int iRetVal = 0;
 	SRadiusHeader *psoRadiusHdr;
-	unsigned int uiPackLen;
 	int iFnRes;
 
 	psoRadiusHdr = reinterpret_cast<SRadiusHeader*>(p_pucBuf);
 
-	uiPackLen = GetPackLen (p_pucBuf);
+	GetPackLen (p_pucBuf);
 
 	do {
 		iFnRes = sprintf (&(p_pszOut[*p_iLen]), "Request code: %u\n", psoRadiusHdr->m_ucCode);
@@ -663,7 +660,7 @@ int CRadiusClient::ParsePacket (unsigned char *p_pucBuf, char *p_pszOut, int *p_
 			*p_iLen += iFnRes;
 		}
 
-		for (int i = 0; i < sizeof(psoRadiusHdr->m_mucAuthenticator); ++i) {
+		for (size_t i = 0; i < sizeof(psoRadiusHdr->m_mucAuthenticator); ++i) {
 			iFnRes = sprintf (&(p_pszOut[*p_iLen]), "%02x", psoRadiusHdr->m_mucAuthenticator[i]);
 			if (0 < iFnRes) {
 				*p_iLen += iFnRes;
@@ -710,7 +707,7 @@ int CRadiusClient::ParsePacket (unsigned char *p_pucBuf, char *p_pszOut, int *p_
 				if (0 < iFnRes) {
 					*p_iLen += iFnRes;
 				}
-				for (int i = 0; i < uiAttrLen; ++i) {
+				for (unsigned int i = 0; i < uiAttrLen; ++i) {
 					if (0x20 <= mcEnumAttrVal[i] && 0x7F > mcEnumAttrVal[i]) {
 						p_pszOut[*p_iLen] = mcEnumAttrVal[i];
 						++ (*p_iLen);
@@ -751,8 +748,6 @@ int CRadiusClient::RecvCoASrvrResp (int p_iReqId)
 	char mcBuf[0x2000];
 	char mcParsedPack[0x2000];
 	int iParsPackLen;
-	char mcMsg[0x2000];
-	int iMsgLen;
 	int iErr;
 	char mcErr[2048];
 	char mcIpAddr[32];
