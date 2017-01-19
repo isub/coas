@@ -1779,6 +1779,10 @@ int RequestOperateCommandReq (std::multimap<unsigned short,SPSReqAttr*> &p_mmapA
 					break;	/* Cisco*/
 				}
 				break;	/* VSA*/
+      case 87: /* NAS-Port-Id */
+      if (0 < ui16AttrLen) {
+        coPSPack.AddAttr (p_psoResp, p_stBufSize, PS_NASPORTID, mcAttrValue, ui16AttrLen, 0);
+      }
 			default:
 				break;
 			}
